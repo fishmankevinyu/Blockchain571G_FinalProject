@@ -12,7 +12,10 @@ pragma solidity ^0.8.9;
 // import "hardhat/console.sol";
 
 contract RestaurantOrder {
-
+    address payable owner;
+    constructor() {
+        owner = payable(msg.sender);
+    }
     struct Customer {
         string name;
         uint id;
@@ -58,10 +61,15 @@ contract RestaurantOrder {
     }
 
     uint public orderCount;
+// Registered customers, restaurants and delivery people
     mapping (uint => Order) public orders;
     mapping (address => Customer) public customers;
     mapping (address => Restaurant) public restaurants;
-    mapping (address => Delivery_Person) public delivery_person;
+    mapping (address => Delivery_Person) public delivery_people;
+// Register requests from customers, restaurants and delivery people
+    Customer[] public request_customers;
+    Restaurant[] public request_restaurants;
+    Delivery_Person[] public request_delivery_people;
 
 
     event OrderPlaced(
@@ -112,13 +120,13 @@ contract RestaurantOrder {
 
 // 3. Function for delivery person to accept the order
     function acceptOrderDelivery(uint _orderId) public{
-        require(delivery_person[msg.sender].hasRegistered, "You are not registered yet! Please register first.");
-        require(!delivery_person[msg.sender].hasActiveOrder, "You have an active order right now, please check In first before next attempt.");
+        require(delivery_people[msg.sender].hasRegistered, "You are not registered yet! Please register first.");
+        require(!delivery_people[msg.sender].hasActiveOrder, "You have an active order right now, please check In first before next attempt.");
         require(orders[_orderId].activeOrder, "Inactive order.");
         require(!orders[_orderId].acceptedDelivery, "Order already accepted.");
         require(orders[_orderId].acceptedRestaurant, "Order not yet accepted by the restaurant");
 
-        delivery_person[msg.sender].hasActiveOrder=true;
+        delivery_people[msg.sender].hasActiveOrder=true;
         orders[_orderId].acceptedDelivery = true;
         orders[_orderId].delivery_person = msg.sender;
     }
@@ -138,7 +146,7 @@ contract RestaurantOrder {
 // 5. Function for the delivery person to confirm his pickup of the order
     function pickedUpOrder(uint _orderId) public {
         require(orders[_orderId].activeOrder, "Inactive order.");
-        require(delivery_person[msg.sender].hasRegistered == true,"You are not registered yet! Please register first.");
+        require(delivery_people[msg.sender].hasRegistered == true,"You are not registered yet! Please register first.");
         require(orders[_orderId].delivery_person == msg.sender, "This is not your order.");
         require(orders[_orderId].acceptedRestaurant, "Order not accepted yet.");
         require(orders[_orderId].readyForDeli == true, "Order is not yet ready");
@@ -151,12 +159,12 @@ contract RestaurantOrder {
 // 6. Function for delivery person to confirm his delivery of the order
     function completeOrderDelivery(uint _orderId) public {
         require(orders[_orderId].activeOrder, "Inactive order.");
-        require(delivery_person[msg.sender].hasRegistered == true, "You are not registered yet! Please register first.");
+        require(delivery_people[msg.sender].hasRegistered == true, "You are not registered yet! Please register first.");
         require(orders[_orderId].delivery_person == msg.sender, "You cannot complete this order.");
         // require(orders[_orderId].acceptedDelivery, "Order not accepted yet.");
         require(!orders[_orderId].completedDeli, "Order already completed.");
 
-        delivery_person[msg.sender].hasActiveOrder=false;
+        delivery_people[msg.sender].hasActiveOrder=false;
         orders[_orderId].completedDeli = true;
     }
 // 7. Function for customers to confirm his receipt of the order
@@ -168,20 +176,29 @@ contract RestaurantOrder {
         payable(orders[_orderId].delivery_person).transfer(orders[_orderId].deli_fee);
         orders[_orderId].activeOrder = false;
     }
-
-
-// Admin withdraw money from the contract, people apply to register, and admin approve
-
-    function registerCustomer(string memory _name, uint _id, string memory _address, uint _phone) public {
-        customers[msg.sender] = Customer(_name, _id, _address, _phone, msg.sender, 0, true);
+// Functions for users to request to be customer, restaurant holder, or delivery person
+    function requestRegisterCustomer(string memory _name, uint _id, string memory _address, uint _phone) public{
+        request_customers.push(Customer(_name, _id, _address, _phone, msg.sender, 0, true));
+    }
+    function requestRegisterRestaurant(string memory _name, uint _id, string memory _addr, string memory _cuisine, uint _minPayment) public {
+        request_restaurants.push(Restaurant(_name, _id, _addr, _cuisine, _minPayment, msg.sender, true));
+    }
+    function requestRegisterDeliveryPerson(string memory _name, uint _id, uint _phone) public{
+        request_delivery_people.push(Delivery_Person(_name, _id, _phone, msg.sender, true, false));
     }
 
-    function registerRestaurant(string memory _name, uint _id, string memory _addr, string memory _cuisine, uint _minPayment) public {
-        restaurants[msg.sender] = Restaurant(_name, _id, _addr, _cuisine, _minPayment, msg.sender, true);
+// Functions for Admin to approve the register requests
+    function registerCustomer(Customer memory customer) public {
+        require(payable(msg.sender) == owner, "Only the Admin Can complete your register");
+        customers[customer.wallet] = customer;
     }
-
-    function registerDeliveryPerson(string memory _name, uint _id, uint _phone) public{
-        delivery_person[msg.sender] = Delivery_Person(_name, _id, _phone, msg.sender, true, false);
+    function registerRestaurant(Restaurant memory restaurant) public {
+        require(payable(msg.sender) == owner, "Only the Admin Can complete your register");
+        restaurants[restaurant.wallet] = restaurant;
+    }
+    function registerDeliveryPerson(Delivery_Person memory delivery_person) public{
+        require(payable(msg.sender) == owner, "Only the Admin Can complete your register");
+        delivery_people[delivery_person.wallet] = delivery_person;
     }
 
     function getRestaurantMinPayment(address _restaurantAddr) public view returns (uint) {
@@ -192,12 +209,16 @@ contract RestaurantOrder {
         return customers[msg.sender].balance;
     }
 // Function for customer to cancel the order
-    function withdraw(uint _orderId) public {
+    function cancel(uint _orderId) public {
         require(!orders[_orderId].acceptedRestaurant, "Cannot cancel order, restaurant already accepted the order.");
         uint amount = customers[msg.sender].balance;
         customers[msg.sender].balance = 0;
         orders[_orderId].activeOrder = false;
         payable(msg.sender).transfer(amount);
+    }
+// Function for the Admin to withdraw earnings from the contract
+    function withdrawMoneyAdmin() public{
+        owner.transfer(address(this).balance);
     }
 
     //possible idea: delivery person bid for delivery fee
