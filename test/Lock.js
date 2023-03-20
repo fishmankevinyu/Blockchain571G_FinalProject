@@ -4,123 +4,77 @@ const {
 } = require("@nomicfoundation/hardhat-network-helpers");
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
+const { isCallTrace } = require("hardhat/internal/hardhat-network/stack-traces/message-trace");
+const { ethers, waffle} = require("hardhat");
 
-describe("Lock", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
-  async function deployOneYearLockFixture() {
-    const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    const ONE_GWEI = 1_000_000_000;
+const eth_payment = 1_000;
+  // Contracts are deployed using the first signer/account by default
+  
 
-    const lockedAmount = ONE_GWEI;
-    const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
-
-    // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
-
-    const Lock = await ethers.getContractFactory("Lock");
-    const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
-
-    return { lock, unlockTime, lockedAmount, owner, otherAccount };
+describe("EthEats", function(){
+  async function deployEtheatsFixture() {
+  
+      // Contracts are deployed using the first signer/account by default
+      const [admin, rstrt, delivery, customer] = await ethers.getSigners();
+  
+      const Etheats = await ethers.getContractFactory("RestaurantOrder");
+      const etheats = await Etheats.deploy();
+  
+      return { etheats, admin, rstrt, delivery, customer};
   }
 
-  describe("Deployment", function () {
-    it("Should set the right unlockTime", async function () {
-      const { lock, unlockTime } = await loadFixture(deployOneYearLockFixture);
 
-      expect(await lock.unlockTime()).to.equal(unlockTime);
-    });
+  async function getGasFee(res_tran) {
+      const tx = await ethers.provider.getTransaction(res_tran.receipt.transactionHash);
+      const gas_price = BigInt(tx.gasPrice);
+      const gas_used = BigInt(res_tran.receipt.gasUsed);
+      let res = BigInt(gas_price * gas_used);
+      return res;
+  }
 
-    it("Should set the right owner", async function () {
-      const { lock, owner } = await loadFixture(deployOneYearLockFixture);
+  it("Test placing an order successfully", async function(){
+    const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
+    await etheats.connect(customer).registerCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).registerRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
 
-      expect(await lock.owner()).to.equal(owner.address);
-    });
-
-    it("Should receive and store the funds to lock", async function () {
-      const { lock, lockedAmount } = await loadFixture(
-        deployOneYearLockFixture
-      );
-
-      expect(await ethers.provider.getBalance(lock.address)).to.equal(
-        lockedAmount
-      );
-    });
-
-    it("Should fail if the unlockTime is not in the future", async function () {
-      // We don't use the fixture here because we want a different deployment
-      const latestTime = await time.latest();
-      const Lock = await ethers.getContractFactory("Lock");
-      await expect(Lock.deploy(latestTime, { value: 1 })).to.be.revertedWith(
-        "Unlock time should be in the future"
-      );
-    });
+    expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
+    .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
+    expect((await etheats.orders(1))["restaurant"]).to.be.equal(rstrt.address);
+    expect((await etheats.orders(1))["customer"]).to.be.equal(customer.address);
   });
 
-  describe("Withdrawals", function () {
-    describe("Validations", function () {
-      it("Should revert with the right error if called too soon", async function () {
-        const { lock } = await loadFixture(deployOneYearLockFixture);
+  it("Test restaurant accepting the order", async function(){
+    const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
+    await etheats.connect(customer).registerCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).registerRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
 
-        await expect(lock.withdraw()).to.be.revertedWith(
-          "You can't withdraw yet"
-        );
-      });
+    expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
+    .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
+    expect((await etheats.orders(1))["restaurant"]).to.be.equal(rstrt.address);
+    expect((await etheats.orders(1))["customer"]).to.be.equal(customer.address);
 
-      it("Should revert with the right error if called from another account", async function () {
-        const { lock, unlockTime, otherAccount } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        // We can increase the time in Hardhat Network
-        await time.increaseTo(unlockTime);
-
-        // We use lock.connect() to send a transaction from another account
-        await expect(lock.connect(otherAccount).withdraw()).to.be.revertedWith(
-          "You aren't the owner"
-        );
-      });
-
-      it("Shouldn't fail if the unlockTime has arrived and the owner calls it", async function () {
-        const { lock, unlockTime } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        // Transactions are sent using the first signer by default
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw()).not.to.be.reverted;
-      });
-    });
-
-    describe("Events", function () {
-      it("Should emit an event on withdrawals", async function () {
-        const { lock, unlockTime, lockedAmount } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw())
-          .to.emit(lock, "Withdrawal")
-          .withArgs(lockedAmount, anyValue); // We accept any value as `when` arg
-      });
-    });
-
-    describe("Transfers", function () {
-      it("Should transfer the funds to the owner", async function () {
-        const { lock, unlockTime, lockedAmount, owner } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw()).to.changeEtherBalances(
-          [owner, lock],
-          [lockedAmount, -lockedAmount]
-        );
-      });
-    });
+    expect(await etheats.connect(rstrt).acceptOrderRestaurant(1))
+    .to.emit(etheats, "OrderedAccepted").withArgs(1, rstrt.address, customer.address, eth_payment);
+    expect((await etheats.orders(1))["acceptedRestaurant"]).to.be.true;
   });
+
+  it("Test delivery person accepting the order", async function(){
+    const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
+    await etheats.connect(customer).registerCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).registerRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(delivery).registerDeliveryPerson("Barry", 100, 7781241234);
+
+    expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
+    .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
+    expect((await etheats.orders(1))["restaurant"]).to.be.equal(rstrt.address);
+    expect((await etheats.orders(1))["customer"]).to.be.equal(customer.address);
+
+    expect(await etheats.connect(rstrt).acceptOrderRestaurant(1))
+    .to.emit(etheats, "OrderedAccepted").withArgs(1, rstrt.address, customer.address, eth_payment);
+    expect((await etheats.orders(1))["acceptedRestaurant"]).to.be.true;
+    
+    await etheats.connect(delivery).acceptOrderDelivery(1)
+    expect((await etheats.orders(1))["delivery_person"]).to.be.equal(delivery.address);
+  });
+
 });
