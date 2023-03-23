@@ -34,8 +34,11 @@ describe("EthEats", function(){
 
   it("Test placing an order successfully", async function(){
     const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
-    await etheats.connect(customer).registerCustomer("Chen", 001, "123 Nowhere St", 6041341234);
-    await etheats.connect(rstrt).registerRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(customer).requestRegisterCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).requestRegisterRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000);
+    // await console.log(etheats.getRequestCustomer())
+    await etheats.connect(admin).registerCustomer(await etheats.request_customers(0));
+    await etheats.connect(admin).registerRestaurant(await etheats.request_restaurants(0));
 
     expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
     .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
@@ -45,8 +48,10 @@ describe("EthEats", function(){
 
   it("Test restaurant accepting the order", async function(){
     const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
-    await etheats.connect(customer).registerCustomer("Chen", 001, "123 Nowhere St", 6041341234);
-    await etheats.connect(rstrt).registerRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(customer).requestRegisterCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).requestRegisterRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000);
+    await etheats.connect(admin).registerCustomer(await etheats.request_customers(0));
+    await etheats.connect(admin).registerRestaurant(await etheats.request_restaurants(0)); 
 
     expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
     .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
@@ -60,9 +65,12 @@ describe("EthEats", function(){
 
   it("Test delivery person accepting the order", async function(){
     const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
-    await etheats.connect(customer).registerCustomer("Chen", 001, "123 Nowhere St", 6041341234);
-    await etheats.connect(rstrt).registerRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
-    await etheats.connect(delivery).registerDeliveryPerson("Barry", 100, 7781241234);
+    await etheats.connect(customer).requestRegisterCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).requestRegisterRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(delivery).requestRegisterDeliveryPerson("Barry", 100, 7781241234);
+    await etheats.connect(admin).registerCustomer(await etheats.request_customers(0));
+    await etheats.connect(admin).registerRestaurant(await etheats.request_restaurants(0)); 
+    await etheats.connect(admin).registerDeliveryPerson(await etheats.request_delivery_people(0));
 
     expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
     .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);

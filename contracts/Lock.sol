@@ -221,6 +221,7 @@ contract RestaurantOrder {
         owner.transfer(address(this).balance);
     }
 
+
     //possible idea: delivery person bid for delivery fee
 
 }
