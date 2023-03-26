@@ -85,4 +85,96 @@ describe("EthEats", function(){
     expect((await etheats.orders(1))["delivery_person"]).to.be.equal(delivery.address);
   });
 
+  it("Test for Indicating an order is ready for delivery", async function(){
+    const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
+    await etheats.connect(customer).requestRegisterCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).requestRegisterRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(delivery).requestRegisterDeliveryPerson("Barry", 100, 7781241234);
+    await etheats.connect(admin).registerCustomer(await etheats.request_customers(0));
+    await etheats.connect(admin).registerRestaurant(await etheats.request_restaurants(0)); 
+    await etheats.connect(admin).registerDeliveryPerson(await etheats.request_delivery_people(0));
+
+    expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
+    .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
+    expect((await etheats.orders(1))["restaurant"]).to.be.equal(rstrt.address);
+    expect((await etheats.orders(1))["customer"]).to.be.equal(customer.address);
+
+    expect(await etheats.connect(rstrt).acceptOrderRestaurant(1))
+    .to.emit(etheats, "OrderedAccepted").withArgs(1, rstrt.address, customer.address, eth_payment);
+    expect((await etheats.orders(1))["acceptedRestaurant"]).to.be.true;
+    
+    await etheats.connect(delivery).acceptOrderDelivery(1)
+    expect((await etheats.orders(1))["delivery_person"]).to.be.equal(delivery.address);
+
+    expect(await etheats.connect(rstrt).orderReady(1)).to.emit(etheats, "OrderReady").withArgs(1, rstrt.address, customer.address, eth_payment)
+  });
+
+  it("Test for confirming the pickup of an order by a delivery person", async function(){
+    const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
+    await etheats.connect(customer).requestRegisterCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).requestRegisterRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(delivery).requestRegisterDeliveryPerson("Barry", 100, 7781241234);
+    await etheats.connect(admin).registerCustomer(await etheats.request_customers(0));
+    await etheats.connect(admin).registerRestaurant(await etheats.request_restaurants(0)); 
+    await etheats.connect(admin).registerDeliveryPerson(await etheats.request_delivery_people(0));
+
+    expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
+    .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
+    expect((await etheats.orders(1))["restaurant"]).to.be.equal(rstrt.address);
+    expect((await etheats.orders(1))["customer"]).to.be.equal(customer.address);
+
+    expect(await etheats.connect(rstrt).acceptOrderRestaurant(1))
+    .to.emit(etheats, "OrderedAccepted").withArgs(1, rstrt.address, customer.address, eth_payment);
+    expect((await etheats.orders(1))["acceptedRestaurant"]).to.be.true;
+    
+    await etheats.connect(delivery).acceptOrderDelivery(1)
+    expect((await etheats.orders(1))["delivery_person"]).to.be.equal(delivery.address);
+
+    expect(await etheats.connect(rstrt).orderReady(1)).to.emit(etheats, "OrderReady").withArgs(1, rstrt.address, customer.address, eth_payment)
+
+    expect(await etheats.connect(delivery).pickedUpOrder(1)).to.emit(etheats, "OrderPickedup").withArgs(1, delivery.address, customer.address, eth_payment)    
+  });
+
+  it("Test for confirming the delivery of an order by a customer", async function(){
+    //load accounts
+    const { etheats, admin, rstrt, delivery, customer } = await loadFixture(deployEtheatsFixture);
+    await etheats.connect(customer).requestRegisterCustomer("Chen", 001, "123 Nowhere St", 6041341234);
+    await etheats.connect(rstrt).requestRegisterRestaurant("HaiDiLao", 010, "123 Somewhere Ave", "Hot pot", 1000); 
+    await etheats.connect(delivery).requestRegisterDeliveryPerson("Barry", 100, 7781241234);
+    await etheats.connect(admin).registerCustomer(await etheats.request_customers(0));
+    await etheats.connect(admin).registerRestaurant(await etheats.request_restaurants(0)); 
+    await etheats.connect(admin).registerDeliveryPerson(await etheats.request_delivery_people(0));
+
+    //Placing order
+    expect(await etheats.connect(customer).placeOrder(rstrt.address, { from: customer.address, value: eth_payment }))
+    .to.emit(etheats, "OrderPlaced").withArgs(1,  "123 Somewhere Ave", customer.address, eth_payment);
+    expect((await etheats.orders(1))["restaurant"]).to.be.equal(rstrt.address);
+    expect((await etheats.orders(1))["customer"]).to.be.equal(customer.address);
+
+    //Accepting order
+    expect(await etheats.connect(rstrt).acceptOrderRestaurant(1))
+    .to.emit(etheats, "OrderedAccepted").withArgs(1, rstrt.address, customer.address, eth_payment);
+    expect((await etheats.orders(1))["acceptedRestaurant"]).to.be.true;
+    
+    //Accepting order delivery
+    await etheats.connect(delivery).acceptOrderDelivery(1)
+    expect((await etheats.orders(1))["delivery_person"]).to.be.equal(delivery.address);
+
+    //Indicating order ready
+    expect(await etheats.connect(rstrt).orderReady(1)).to.emit(etheats, "OrderReady").withArgs(1, rstrt.address, customer.address, eth_payment)
+
+    //Indicating order picked up
+    expect(await etheats.connect(delivery).pickedUpOrder(1)).to.emit(etheats, "OrderPickedup").withArgs(1, delivery.address, customer.address, eth_payment) 
+  
+    //Confirm delivered
+    await await etheats.connect(delivery).completeOrderDelivery(1)
+    await etheats.connect(customer).confirmDelivery(1)
+    expect((await etheats.orders(1))["activeOrder"]).to.be.equal(false);
+
+    
+  });
+
+
+
+
 });
