@@ -83,6 +83,13 @@ contract RestaurantOrder {
         address restaurant, 
         address customer, 
         uint amount);
+
+    event OrderAcceptedDelivery(
+        uint orderId,
+        address restaurant,
+        address customer,
+        address delivery,
+        uint amount);
         
     event OrderReady(
         uint orderId, 
@@ -94,6 +101,20 @@ contract RestaurantOrder {
         uint orderId,
         address delivery_person,
         address customer,
+        uint amount);
+
+    event OrderCompleteDelivery(
+        uint orderId,
+        address restaurant,
+        address customer,
+        address delivery,
+        uint amount);
+
+    event OrderComplete(
+        uint orderId,
+        address restaurant,
+        address customer,
+        address delivery,
         uint amount);
     
 // 1. Function for customer to place an order
@@ -129,6 +150,8 @@ contract RestaurantOrder {
         delivery_people[msg.sender].hasActiveOrder=true;
         orders[_orderId].acceptedDelivery = true;
         orders[_orderId].delivery_person = msg.sender;
+
+        emit OrderAcceptedDelivery(_orderId, orders[_orderId].restaurant, orders[_orderId].customer, msg.sender, orders[_orderId].amount);
     }
 
 // 4. Function for the restaurant to indicate the order is ready
@@ -161,11 +184,13 @@ contract RestaurantOrder {
         require(orders[_orderId].activeOrder, "Inactive order.");
         require(delivery_people[msg.sender].hasRegistered == true, "You are not registered yet! Please register first.");
         require(orders[_orderId].delivery_person == msg.sender, "You cannot complete this order.");
-        // require(orders[_orderId].acceptedDelivery, "Order not accepted yet.");
         require(!orders[_orderId].completedDeli, "Order already completed.");
+        require(orders[_orderId].pickedUpDelivery == true, "Order not yet picked up");
 
         delivery_people[msg.sender].hasActiveOrder=false;
         orders[_orderId].completedDeli = true;
+
+        emit OrderCompleteDelivery(_orderId, orders[_orderId].restaurant, orders[_orderId].customer, msg.sender, orders[_orderId].amount);
     }
 // 7. Function for customers to confirm his receipt of the order
     function confirmDelivery(uint _orderId) public {
@@ -175,6 +200,8 @@ contract RestaurantOrder {
         require(orders[_orderId].completedDeli, "Order already completed.");
         payable(orders[_orderId].delivery_person).transfer(orders[_orderId].deli_fee);
         orders[_orderId].activeOrder = false;
+
+        emit OrderComplete(_orderId, orders[_orderId].restaurant, orders[_orderId].customer, msg.sender, orders[_orderId].amount);
     }
 // Functions for users to request to be customer, restaurant holder, or delivery person
     function requestRegisterCustomer(string memory _name, uint _id, string memory _address, uint _phone) public{
