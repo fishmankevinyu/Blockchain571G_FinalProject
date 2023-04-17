@@ -1,0 +1,65 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    height: 40vmin;
+  }
+}
+
+.App-header {
+  background-color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(15px + 2vmin);
+  color: black;
+}
+
+.button-container {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3rem;
+}
+.button-customer{
+  margin-right: 2rem;
+}
+.button-restaurant{
+  margin-right: 2rem;
+}
+
+.App-header p {
+  font-weight: bold;
+  margin-top: 4rem;
+}
+
+.button-container button {
+  flex: 1;
+  padding: 1rem;
+  font-size: 1.5rem;
+  background-color: #be3144;
+  color: white;
+  border: none;
+  cursor: pointer;
+  height: 3rem; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.button-container button:hover {
+  background-color: darkred;
+}
+
+
+
+
+
