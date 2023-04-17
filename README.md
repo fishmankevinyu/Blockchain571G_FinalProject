@@ -13,3 +13,6 @@ npx hardhat run scripts/deploy.js
 ```
 ```deploy
 npx hardhat run .\scripts\deploy.js --network matic
+
+To start the frontend, go to my-app directory, run:
+npm start
